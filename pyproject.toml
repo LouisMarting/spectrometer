@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectrometer"
+description = "Model for on-chip superconducting filterbanks"
+version = "0.1.0"
+# readme = "README.md"
+authors = [
+    { name = "Louis Marting", email = "l.h.marting@tudelft.nl" }
+]
+dependencies = [
+    "scipy",
+    "matplotlib",
+    "numpy"
+]
+
+#setuptools automatically checks all folders under the root folder. the setting namespaces = false prevents this.
+[tool.setuptools.packages.find]
+where = ["."]  # list of folders that contain the packages (["."] by default)
+include = ["spectrometer*"]  # package names should match these glob patterns (["*"] by default)
+exclude = ["spectrometer.tests*"]  # exclude packages matching these glob patterns (empty by default)
+namespaces = false  # to disable scanning PEP 420 namespaces (true by default)
