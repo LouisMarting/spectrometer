@@ -13,147 +13,146 @@ from .filters import BaseFilter, DirectionalFilter, ManifoldFilter, ReflectorFil
 
 
 class Filterbank:
-    def __init__(self, FilterClass : BaseFilter, TransmissionLines : dict, f0_min, f0_max, R=None, Ql=None, oversampling=None, sigma_f0=0., sigma_Qc=0., compensate=True) -> None:
-        self.S_param = None
-        self.f = None
-        self.S11_absSq = None
-        self.S21_absSq = None
-        self.S31_absSq_list = None
-
-        self.f0_realized = None
-        self.Ql_realized = None
-        self.inband_filter_eff = None
-        self.inband_fraction = None
-
+    def __init__(self, FilterClass : BaseFilter, TransmissionLines : dict, f0, Ql) -> None:
         self.FilterClass = FilterClass
-        self.TransmissionLines = TransmissionLines
-        self.f0_min = f0_min
-        self.f0_max = f0_max
-        self.sigma_f0 = sigma_f0
-        self.sigma_Qc = sigma_Qc
-        self.compensate = compensate
+        self.TransmissionLines = TransmissionLines # to remove
+        self.f0 = f0
+        self.Ql = Ql # assume now same value for all filters, but could vary it later ?? maybe not in init, part of variance functions
+
+        # Assume regular spacing of f0 for R calculation
+        df0 = np.abs(f0[1] - f0[0])
+        self.R = np.round(f0[0] / df0,decimals=3)
+
+        self.oversampling = self.R / Ql
         
-        assert sum(p is None for p in (R, Ql, oversampling)) == 1, "Exactly one parameter of R, Ql, oversampling should not be defined, as it is inferred from the other two"
+
+        self.Filters = np.empty(len(f0),dtype=BaseFilter)
+        for i,fi in enumerate(f0):
+            self.Filters[i] = FilterClass(f0=fi, Ql=Ql, TransmissionLines = copy.deepcopy(TransmissionLines),compensate=False)
+
+
+    # this should be moved to the filterbank submodule as a separate function
+    @staticmethod
+    def f0_range(f0_min, f0_max, R):
+        '''
+        Returns a list of f0 based on a frequency range and the desired spectral resolution. 
+        The list is ordered from highest frequency to lowest frequency.
+        And the list is aligned to the lowest frequency value.
+        '''
+
+        #todo change from floor to ceil. to cover full band, instead of coming short sometimes.
+        n_filters = int(np.floor(1 + np.log10(f0_max / f0_min) / np.log10(1 + 1 / R))) 
+        
+        f0 = np.zeros(n_filters)
+        f0[0] = f0_min
+        for i in np.arange(1,n_filters):
+            f0[i] = f0[i-1] + f0[i-1] / R
+        return np.flip(f0)
+
+    @classmethod
+    def from_parameters(cls, FilterClass : BaseFilter, TransmissionLines : dict, f0_min, f0_max, R=None, Ql=None, oversampling=None):
+        
+        assert sum(p is None for p in (R, Ql, oversampling)) == 1, "Exactly one parameter of R, Ql, oversampling should not be defined, \
+                                                                    as it is inferred from the other two"
 
         if oversampling is None:
-            self.Ql = Ql
-            self.R = R
-            self.oversampling = R / Ql
+            oversampling = R / Ql
         elif Ql is None:
-            self.R = R
-            self.oversampling = oversampling
-            self.Ql = R / oversampling
+            Ql = R / oversampling
         elif R is None:
-            self.Ql = Ql
-            self.oversampling = oversampling
-            self.R = oversampling * Ql
+            R = oversampling * Ql
         
+        f0 = cls.f0_range(f0_min, f0_max, R)
 
-
-        self.filterbank_f0(f0_min, f0_max, R)
-
-        self.Filters = np.empty(self.n_filters,dtype=BaseFilter)
-        for i in np.arange(self.n_filters):
-            self.Filters[i] = FilterClass(f0=self.f0[i], Ql=Ql, TransmissionLines = copy.deepcopy(TransmissionLines), sigma_f0=sigma_f0, sigma_Qc=sigma_Qc, compensate=compensate)
-
-    # Should this be a staticmethod?
-    def filterbank_f0(self, f0_min, f0_max, R):
-        self.n_filters = int(np.floor(1 + np.log10(f0_max / f0_min) / np.log10(1 + 1 / R)))
-        
-        f0 = np.zeros(self.n_filters)
-        f0[0] = f0_min
-        for i in np.arange(1,self.n_filters):
-            f0[i] = f0[i-1] + f0[i-1] / R
-        self.f0 = np.flip(f0)
-    
-    
-
-
+        return cls(FilterClass, TransmissionLines, f0, Ql)
 
 
 ### GIGANTIC function to calculate S, needs to be sped up and probably split into some more managable parts.    
     def S(self,f):
-        if np.array_equal(self.f,f):
-            return self.S_param
+        if hasattr(self,'f'):
+            if np.array_equal(self.f,f):
+                return self.S_param
 
-        else:
-            Z0_thru = self.TransmissionLines['through'].Z0
-            Z0_mkid = self.TransmissionLines['MKID'].Z0
-            
-            ABCD_preceding = ABCD_eye(len(f),dtype=np.cfloat)
-            ABCD_succeeding = ABCD_eye(len(f),dtype=np.cfloat)
-
-            ABCD_list = ABCD_eye((len(f),self.n_filters),dtype=np.cfloat)
-            ABCD_sep_list = ABCD_eye((len(f),self.n_filters),dtype=np.cfloat)
-            
-
-            # Calculate a full filterbank chain
-            for i, Filter in enumerate(self.Filters):
-                Filter : BaseFilter # set the expected datatype of Filter
-                
-
-                # Eventually, these indexed lists could be replaced by cached versions.
-                ABCD_list[:,i,:,:] = Filter.ABCD(f)
-                ABCD_sep_list[:,i,:,:] = Filter.ABCD_sep(f)
-
-                # Can we use np.insert() for these and do this calc faster outside of this for loop?
-                ABCD_succeeding = chain(
-                    ABCD_succeeding,
-                    ABCD_list[:,i,:,:],
-                    ABCD_sep_list[:,i,:,:],
-                )
-            
-            s_parameter_array_size = Filter.n_outputs() * self.n_filters + 2
-            S = np.empty((len(f),s_parameter_array_size,),dtype=np.cfloat)
-
-            for i,Filter in enumerate(self.Filters):
-                Filter : BaseFilter # set the expected datatype of Filter
-                
-                # Remove the ith filter from the succeeding filters
-                ABCD_succeeding = unchain(
-                    ABCD_succeeding,
-                    ABCD_list[:,i,:,:],
-                    ABCD_sep_list[:,i,:,:]
-                )
-
-                # Calculate the equivalent ABCD to the ith detector
-                ABCD_to_MKID = Filter.ABCD_to_MKID(f,ABCD_succeeding)
-
-                assert len(ABCD_to_MKID) == Filter.n_outputs(), "Something seriously wrong here"
-
-                for j,ABCD_to_one_output in enumerate(ABCD_to_MKID):
-                    ABCD_through_filter = chain(
-                        ABCD_preceding,
-                        ABCD_to_one_output
-                    )
-                    S_one_output = abcd2s(ABCD_through_filter,[Z0_thru,Z0_mkid])
-
-                    index = (Filter.n_outputs() * i)+j+2
-                    
-                    S[:,index] = S_one_output[:,1,0] # Si1
-                
-                ABCD_preceding = chain(
-                    ABCD_preceding,
-                    ABCD_list[:,i,:,:],
-                    ABCD_sep_list[:,i,:,:]
-                )
-            
-            S_full_FB = abcd2s(ABCD_preceding,Z0_thru)
-            S[:,0] = S_full_FB[:,0,0] # S11
-            S[:,1] = S_full_FB[:,1,0] # S21
-
-            self.S_param = S
-            self.f = f
-
-            self.S11_absSq = np.abs(S[:,0])**2
-            self.S21_absSq = np.abs(S[:,1])**2
-            if self.Filters[0].n_outputs() == 2:
-                self.S31_absSq_list = np.abs(S[:,2::2])**2 + np.abs(S[:,3::2])**2
-            else:
-                self.S31_absSq_list = np.abs(S[:,2:])**2
-
-            return self.S_param
     
+        Z0_thru = self.TransmissionLines['through'].Z0
+        Z0_mkid = self.TransmissionLines['MKID'].Z0
+        
+        ABCD_preceding = ABCD_eye(len(f),dtype=np.cfloat)
+        ABCD_succeeding = ABCD_eye(len(f),dtype=np.cfloat)
+
+        ABCD_list = ABCD_eye((len(f),len(self.f0)),dtype=np.cfloat)
+        ABCD_sep_list = ABCD_eye((len(f),len(self.f0)),dtype=np.cfloat)
+        
+
+        # Calculate a full filterbank chain
+        for i, Filter in enumerate(self.Filters):
+            Filter : BaseFilter # set the expected datatype of Filter
+            
+
+            # Eventually, these indexed lists could be replaced by cached versions.
+            ABCD_list[:,i,:,:] = Filter.ABCD(f)
+            ABCD_sep_list[:,i,:,:] = Filter.ABCD_sep(f)
+
+            # Can we use np.insert() for these and do this calc faster outside of this for loop?
+            ABCD_succeeding = chain(
+                ABCD_succeeding,
+                ABCD_list[:,i,:,:],
+                ABCD_sep_list[:,i,:,:],
+            )
+        
+        s_parameter_array_size = Filter.n_outputs() * len(self.f0) + 2
+        S = np.empty((len(f),s_parameter_array_size,),dtype=np.cfloat)
+
+        for i,Filter in enumerate(self.Filters):
+            Filter : BaseFilter # set the expected datatype of Filter
+            
+            # Remove the ith filter from the succeeding filters
+            ABCD_succeeding = unchain(
+                ABCD_succeeding,
+                ABCD_list[:,i,:,:],
+                ABCD_sep_list[:,i,:,:]
+            )
+
+            # Calculate the equivalent ABCD to the ith detector
+            ABCD_to_MKID = Filter.ABCD_to_MKID(f,ABCD_succeeding)
+
+            assert len(ABCD_to_MKID) == Filter.n_outputs(), "Something seriously wrong here"
+
+            for j,ABCD_to_one_output in enumerate(ABCD_to_MKID):
+                ABCD_through_filter = chain(
+                    ABCD_preceding,
+                    ABCD_to_one_output
+                )
+                S_one_output = abcd2s(ABCD_through_filter,[Z0_thru,Z0_mkid])
+
+                index = (Filter.n_outputs() * i)+j+2
+                
+                S[:,index] = S_one_output[:,1,0] # Si1
+            
+            ABCD_preceding = chain(
+                ABCD_preceding,
+                ABCD_list[:,i,:,:],
+                ABCD_sep_list[:,i,:,:]
+            )
+        
+        S_full_FB = abcd2s(ABCD_preceding,Z0_thru)
+        S[:,0] = S_full_FB[:,0,0] # S11
+        S[:,1] = S_full_FB[:,1,0] # S21
+
+        self.S_param = S
+        self.f = f
+
+        self.S11_absSq = np.abs(S[:,0])**2
+        self.S21_absSq = np.abs(S[:,1])**2
+        if self.Filters[0].n_outputs() == 2:
+            self.S31_absSq_list = np.abs(S[:,2::2])**2 + np.abs(S[:,3::2])**2
+        else:
+            self.S31_absSq_list = np.abs(S[:,2:])**2
+
+        return self.S_param
+    
+
+    # This should combine with the function above
     def S_sparse(self,f,indices):
         sparse_indices = set(indices)
 
@@ -163,8 +162,8 @@ class Filterbank:
         ABCD_preceding = ABCD_eye(len(f),dtype=np.cfloat)
         ABCD_succeeding = ABCD_eye(len(f),dtype=np.cfloat)
 
-        ABCD_list = ABCD_eye((len(f),self.n_filters),dtype=np.cfloat)
-        ABCD_sep_list = ABCD_eye((len(f),self.n_filters),dtype=np.cfloat)
+        ABCD_list = ABCD_eye((len(f),len(self.f0)),dtype=np.cfloat)
+        ABCD_sep_list = ABCD_eye((len(f),len(self.f0)),dtype=np.cfloat)
         
 
         # Calculate a full filterbank chain
@@ -261,12 +260,12 @@ class Filterbank:
 
         fq = np.linspace(self.f[0],self.f[-1],n_interp*len(self.f))
         dfq = fq[1] - fq[0]
-        self.f0_realized = np.zeros(self.n_filters)
-        self.Ql_realized = np.zeros(self.n_filters)
-        self.inband_filter_eff = np.zeros(self.n_filters)
-        self.inband_fraction = np.zeros(self.n_filters)
+        self.f0_realized = np.zeros(len(self.f0))
+        self.Ql_realized = np.zeros(len(self.f0))
+        self.inband_filter_eff = np.zeros(len(self.f0))
+        self.inband_fraction = np.zeros(len(self.f0))
 
-        for i in np.arange(self.n_filters):
+        for i in np.arange(len(self.f0)):
             if n_interp > 1:
                 S31_absSq_q = np.interp(fq,self.f,self.S31_absSq_list[:,i])
             else:
@@ -394,40 +393,42 @@ class Filterbank:
 
         return self.f0_realized, self.Ql_realized, self.inband_filter_eff, self.inband_fraction
     
-    def reset_and_shuffle(self):
-        for i in np.arange(self.n_filters):
-            self.Filters[i] = self.FilterClass(f0=self.f0[i], Ql=self.Ql, TransmissionLines = self.TransmissionLines, sigma_f0=self.sigma_f0, sigma_Qc=self.sigma_Qc)
+    # def reset_and_shuffle(self):
+    #     for i in np.arange(self.n_filters):
+    #         self.Filters[i] = self.FilterClass(f0=self.f0[i], Ql=self.Ql, TransmissionLines = self.TransmissionLines, sigma_f0=self.sigma_f0, sigma_Qc=self.sigma_Qc)
 
-        self.S_param = None
-        self.f = None
-        self.S11_absSq = None
-        self.S21_absSq = None
-        self.S31_absSq_list = None
+    #     self.S_param = None
+    #     self.f = None
+    #     self.S11_absSq = None
+    #     self.S21_absSq = None
+    #     self.S31_absSq_list = None
 
-        self.f0_realized = None
-        self.Ql_realized = None
+    #     self.f0_realized = None
+    #     self.Ql_realized = None
 
-    def sparse_filterbank(self,indices):
-        self.S_param = None
-        self.f = None
-        self.S11_absSq = None
-        self.S21_absSq = None
-        self.S31_absSq_list = None
 
-        self.f0_realized = None
-        self.Ql_realized = None
-        self.inband_filter_eff = None
-        self.inband_fraction = None
+#### REPLACE WITH Delete filters
+    # def sparse_filterbank(self,indices):
+    #     self.S_param = None
+    #     self.f = None
+    #     self.S11_absSq = None
+    #     self.S21_absSq = None
+    #     self.S31_absSq_list = None
 
-        self.n_filters = len(indices)
+    #     self.f0_realized = None
+    #     self.Ql_realized = None
+    #     self.inband_filter_eff = None
+    #     self.inband_fraction = None
 
-        #select only the sparse filters.
-        f0_full = self.f0
-        self.f0 = f0_full[indices]
+    #     self.n_filters = len(indices)
 
-        self.Filters = np.empty(self.n_filters,dtype=BaseFilter)
-        for i in np.arange(self.n_filters):
-            self.Filters[i] = self.FilterClass(f0=self.f0[i], Ql=self.Ql, TransmissionLines = copy.deepcopy(self.TransmissionLines), sigma_f0=self.sigma_f0, sigma_Qc=self.sigma_Qc, compensate=self.compensate)
+    #     #select only the sparse filters.
+    #     f0_full = self.f0
+    #     self.f0 = f0_full[indices]
+
+    #     self.Filters = np.empty(self.n_filters,dtype=BaseFilter)
+    #     for i in np.arange(self.n_filters):
+    #         self.Filters[i] = self.FilterClass(f0=self.f0[i], Ql=self.Ql, TransmissionLines = copy.deepcopy(self.TransmissionLines), sigma_f0=self.sigma_f0, sigma_Qc=self.sigma_Qc, compensate=self.compensate)
 
     def coupler_variance(self,Qc_shifted):
 

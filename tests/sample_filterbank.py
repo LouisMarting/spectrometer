@@ -42,17 +42,27 @@ TransmissionLinesDict = {
 
 
 ## Filterbank
-FB = Filterbank(
+FB = Filterbank.from_parameters(
     FilterClass=DirectionalFilter,
     TransmissionLines=TransmissionLinesDict,
     f0_min=f0_min,
     f0_max=f0_max,
-    R=30,
-    Ql=22.6,
-    sigma_f0=0,
-    sigma_Qc=0,
-    compensate=False
+    R=R_fb,
+    Ql=Ql,
+    )
+
+scale_down = 260/270
+f0 = Filterbank.f0_range(f0_min=scale_down*f0_min,f0_max=scale_down*f0_max,R=R_fb)
+
+FB = Filterbank(
+    FilterClass=DirectionalFilter,
+    TransmissionLines=TransmissionLinesDict,
+    f0=f0,
+    Ql=Ql
 )
+
+print(FB.R)
+print(FB.oversampling)
 
 # Caculate S-Parameters and realized values (suppress output)
 FB.S(f);
@@ -64,7 +74,7 @@ FB.realized_parameters();
 S31_all = FB.S31_absSq_list
 
 cmap = colormaps['rainbow']
-norm = mpl.colors.Normalize(vmin=0, vmax=FB.n_filters)
+norm = mpl.colors.Normalize(vmin=0, vmax=len(FB.f0))
 
 fig, ax =plt.subplots(nrows=1,ncols=1,figsize=(8,4),layout='constrained')
 
