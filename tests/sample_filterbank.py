@@ -85,4 +85,4 @@ ax.plot(f/1e9,FB.S11_absSq,color='c',linestyle='--')
 ax.plot(f/1e9,FB.S21_absSq,color='m',linestyle='--')
 ax.plot(f/1e9,np.sum(FB.S31_absSq_list,axis=1),color='k',linestyle='--')
 
-plt.show()
+# plt.show()

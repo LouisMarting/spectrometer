@@ -62,4 +62,5 @@ def ABCD_eye(size,**ndarray_kwargs):
     This results in the 2 by 2 unity array to be in the last two dimensions, which is useful for matrix multiplications.
     """
     size = tuple(size) if np.iterable(size) else (size,)
-    return np.tile(np.eye(2,**ndarray_kwargs),reps=size+(1,1))
+    ndarray_kwargs.pop('dtype', None)
+    return np.tile(np.eye(2,dtype=np.cfloat,**ndarray_kwargs),reps=size+(1,1))

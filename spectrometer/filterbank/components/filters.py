@@ -8,6 +8,8 @@ from ...tline.components import TransmissionLine,Resonator,Reflector
 
 
 class BaseFilter:
+    n_outputs = 1
+
     def __init__(self, f0, Ql, TransmissionLines : dict) -> None:
         self.S_param = None
         self.f = None
@@ -35,14 +37,6 @@ class BaseFilter:
 
         return ABCD
     
-    
-    def n_outputs(self):
-        if isinstance(self,(ManifoldFilter,ReflectorFilter)):
-            return 1
-        elif isinstance(self,(DirectionalFilter,)):
-            return 2
-        else:
-            return None
 
     def ABCD_shunt_termination(self, f, ABCD_to_termination):
         ABCD = abcd_shuntload(
@@ -132,6 +126,8 @@ class BaseFilter:
 
 
 class ManifoldFilter(BaseFilter):
+    n_outputs = 1
+
     def __init__(self, f0, Ql, TransmissionLines: dict, sigma_f0=0, sigma_Qc=0, compensate=True) -> None:
         super().__init__(f0, Ql, TransmissionLines)
 
@@ -168,6 +164,8 @@ class ManifoldFilter(BaseFilter):
 
 
 class ReflectorFilter(BaseFilter):
+    n_outputs = 1
+
     def __init__(self, f0, Ql, TransmissionLines: dict, sigma_f0=0, sigma_Qc=0, compensate=True) -> None:
         super().__init__(f0, Ql, TransmissionLines)
 
@@ -234,6 +232,8 @@ class ReflectorFilter(BaseFilter):
 
 
 class DirectionalFilter(BaseFilter):
+    n_outputs = 2
+
     def __init__(self, f0, Ql, TransmissionLines : dict, sigma_f0=0, sigma_Qc=0, compensate=True) -> None:
         super().__init__(f0, Ql, TransmissionLines)
 

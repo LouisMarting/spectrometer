@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.signal import find_peaks
+
 import copy
+from functools import lru_cache
 
 from ...utils.utils import ABCD_eye
 from ...tline.transformations import abcd2s,chain,unchain
@@ -51,7 +53,9 @@ class Filterbank:
 
     @classmethod
     def from_parameters(cls, FilterClass : BaseFilter, TransmissionLines : dict, f0_min, f0_max, R=None, Ql=None, oversampling=None):
-        
+        '''
+        Provide an alternative way of generating a filterbank.
+        '''
         assert sum(p is None for p in (R, Ql, oversampling)) == 1, "Exactly one parameter of R, Ql, oversampling should not be defined, \
                                                                     as it is inferred from the other two"
 
@@ -67,75 +71,38 @@ class Filterbank:
         return cls(FilterClass, TransmissionLines, f0, Ql)
 
 
-### GIGANTIC function to calculate S, needs to be sped up and probably split into some more managable parts.    
+    # @lru_cache(maxsize=2)
     def S(self,f):
-        if hasattr(self,'f'):
-            if np.array_equal(self.f,f):
-                return self.S_param
-
     
         Z0_thru = self.TransmissionLines['through'].Z0
         Z0_mkid = self.TransmissionLines['MKID'].Z0
         
-        ABCD_preceding = ABCD_eye(len(f),dtype=np.cfloat)
-        ABCD_succeeding = ABCD_eye(len(f),dtype=np.cfloat)
-
-        ABCD_list = ABCD_eye((len(f),len(self.f0)),dtype=np.cfloat)
-        ABCD_sep_list = ABCD_eye((len(f),len(self.f0)),dtype=np.cfloat)
+        # get full 4D matrixes of the preceding and succeeding part of the filterbank at each filter for all freq.
+        ABCD_preceding, ABCD_succeeding, ABCD_total = self._generate_preceding_succeeding_total(f)
         
-
-        # Calculate a full filterbank chain
-        for i, Filter in enumerate(self.Filters):
-            Filter : BaseFilter # set the expected datatype of Filter
-            
-
-            # Eventually, these indexed lists could be replaced by cached versions.
-            ABCD_list[:,i,:,:] = Filter.ABCD(f)
-            ABCD_sep_list[:,i,:,:] = Filter.ABCD_sep(f)
-
-            # Can we use np.insert() for these and do this calc faster outside of this for loop?
-            ABCD_succeeding = chain(
-                ABCD_succeeding,
-                ABCD_list[:,i,:,:],
-                ABCD_sep_list[:,i,:,:],
-            )
-        
-        s_parameter_array_size = Filter.n_outputs() * len(self.f0) + 2
-        S = np.empty((len(f),s_parameter_array_size,),dtype=np.cfloat)
+        # define empty S parameter array
+        s_array_size = self.FilterClass.n_outputs * len(self.f0) + 2
+        S = np.empty((len(f),s_array_size,),dtype=np.cfloat)
 
         for i,Filter in enumerate(self.Filters):
             Filter : BaseFilter # set the expected datatype of Filter
-            
-            # Remove the ith filter from the succeeding filters
-            ABCD_succeeding = unchain(
-                ABCD_succeeding,
-                ABCD_list[:,i,:,:],
-                ABCD_sep_list[:,i,:,:]
-            )
 
             # Calculate the equivalent ABCD to the ith detector
-            ABCD_to_MKID = Filter.ABCD_to_MKID(f,ABCD_succeeding)
-
-            assert len(ABCD_to_MKID) == Filter.n_outputs(), "Something seriously wrong here"
+            ABCD_to_MKID = Filter.ABCD_to_MKID(f,ABCD_succeeding[i,:,:,:])
 
             for j,ABCD_to_one_output in enumerate(ABCD_to_MKID):
                 ABCD_through_filter = chain(
-                    ABCD_preceding,
+                    ABCD_preceding[i,:,:,:],
                     ABCD_to_one_output
                 )
                 S_one_output = abcd2s(ABCD_through_filter,[Z0_thru,Z0_mkid])
 
-                index = (Filter.n_outputs() * i)+j+2
+                index = (self.FilterClass.n_outputs * i)+j+2
                 
                 S[:,index] = S_one_output[:,1,0] # Si1
             
-            ABCD_preceding = chain(
-                ABCD_preceding,
-                ABCD_list[:,i,:,:],
-                ABCD_sep_list[:,i,:,:]
-            )
         
-        S_full_FB = abcd2s(ABCD_preceding,Z0_thru)
+        S_full_FB = abcd2s(ABCD_total,Z0_thru)
         S[:,0] = S_full_FB[:,0,0] # S11
         S[:,1] = S_full_FB[:,1,0] # S21
 
@@ -144,13 +111,38 @@ class Filterbank:
 
         self.S11_absSq = np.abs(S[:,0])**2
         self.S21_absSq = np.abs(S[:,1])**2
-        if self.Filters[0].n_outputs() == 2:
+        if self.FilterClass.n_outputs == 2:
             self.S31_absSq_list = np.abs(S[:,2::2])**2 + np.abs(S[:,3::2])**2
         else:
             self.S31_absSq_list = np.abs(S[:,2:])**2
 
         return self.S_param
     
+
+    def _generate_preceding_succeeding_total(self,f):
+        size = (len(self.f0),len(f))
+        ABCD_preceding = ABCD_eye(size)
+        ABCD_succeeding = ABCD_eye(size)
+        
+        ABCD_preceding_temp = ABCD_eye(len(f))
+        # Calculate a full filterbank chain
+        for i, Filter in enumerate(self.Filters):
+            Filter : BaseFilter # set the expected datatype of Filter
+            ABCD_preceding[i,:,:,:] = ABCD_preceding_temp
+
+            ABCD_preceding_temp = chain(
+                ABCD_preceding_temp,
+                Filter.ABCD(f),
+                Filter.ABCD_sep(f),
+            )
+
+        ABCD_total = ABCD_preceding_temp
+        ABCD_succeeding = unchain(
+            ABCD_total,
+            ABCD_preceding 
+        )
+
+        return ABCD_preceding, ABCD_succeeding, ABCD_total
 
     # This should combine with the function above
     def S_sparse(self,f,indices):
@@ -159,11 +151,11 @@ class Filterbank:
         Z0_thru = self.TransmissionLines['through'].Z0
         Z0_mkid = self.TransmissionLines['MKID'].Z0
         
-        ABCD_preceding = ABCD_eye(len(f),dtype=np.cfloat)
-        ABCD_succeeding = ABCD_eye(len(f),dtype=np.cfloat)
+        ABCD_preceding = ABCD_eye(len(f))
+        ABCD_succeeding = ABCD_eye(len(f))
 
-        ABCD_list = ABCD_eye((len(f),len(self.f0)),dtype=np.cfloat)
-        ABCD_sep_list = ABCD_eye((len(f),len(self.f0)),dtype=np.cfloat)
+        ABCD_list = ABCD_eye((len(f),len(self.f0)))
+        ABCD_sep_list = ABCD_eye((len(f),len(self.f0)))
         
 
         # Calculate a full filterbank chain
