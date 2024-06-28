@@ -91,7 +91,7 @@ class Filterbank:
             Filter : BaseFilter # set the expected datatype of Filter
 
             # Calculate the equivalent ABCD to the ith detector
-            ABCD_to_MKID = Filter.ABCD_to_MKID(f,ABCD_succeeding[i_existing_filters[i],:,:,:])
+            ABCD_to_MKID = Filter.ABCD_to_MKID(f,chain(Filter.ABCD_sep(f),ABCD_succeeding[i_existing_filters[i],:,:,:]))
 
             for j,ABCD_to_one_output in enumerate(ABCD_to_MKID):
                 ABCD_through_filter = chain(
@@ -134,17 +134,22 @@ class Filterbank:
             Filter : BaseFilter # set the expected datatype of Filter
             ABCD_preceding[i,:,:,:] = ABCD_preceding_temp
 
+            # chain all the preceding together for making the total later
             ABCD_preceding_temp = chain(
                 ABCD_preceding_temp,
                 Filter.ABCD(f),
                 Filter.ABCD_sep(f),
             )
 
+        
+
         ABCD_total = ABCD_preceding_temp
         ABCD_succeeding = unchain(
             ABCD_total,
-            ABCD_preceding 
+            ABCD_preceding
         )
+        ABCD_succeeding[:-1,:,:,:] = ABCD_succeeding[1:,:,:,:]
+        ABCD_succeeding[-1,:,:,:] = ABCD_eye(len(f))
 
         return ABCD_preceding, ABCD_succeeding, ABCD_total
 

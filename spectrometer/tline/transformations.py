@@ -205,4 +205,8 @@ def y2abcd(Y):
 
     return ABCD
 
+def t_circuit():
+    pass
 
+def pi_circuit():
+    pass

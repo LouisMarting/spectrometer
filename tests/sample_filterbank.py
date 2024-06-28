@@ -5,6 +5,7 @@ mpl.use("MacOSX")
 from matplotlib import colormaps
 
 from spectrometer.filterbank.components import Filterbank, TransmissionLine, DirectionalFilter
+from spectrometer.utils.utils import to_db
 
 plt.style.use('~/Repos/louis-style-docs/default.mplstyle')
 
@@ -65,10 +66,7 @@ print(FB.R)
 print(FB.oversampling)
 
 # Caculate S-Parameters and realized values (suppress output)
-FB.S(f);
-FB.realized_parameters();
-
-
+FB.S(f)
 
 # plot filterbank
 S31_all = FB.S31_absSq_list
@@ -79,10 +77,18 @@ norm = mpl.colors.Normalize(vmin=0, vmax=len(FB.f0))
 fig, ax =plt.subplots(nrows=1,ncols=1,figsize=(8,4),layout='constrained')
 
 for i,S31_absSq in enumerate(S31_all.T):
-    ax.plot(f/1e9,S31_absSq,color=cmap(norm(i)))
+    ax.plot(f/1e9,to_db(S31_absSq),color=cmap(norm(i)))
 
-ax.plot(f/1e9,FB.S11_absSq,color='c',linestyle='--')
-ax.plot(f/1e9,FB.S21_absSq,color='m',linestyle='--')
-ax.plot(f/1e9,np.sum(FB.S31_absSq_list,axis=1),color='k',linestyle='--')
+ax.plot(f/1e9,to_db(FB.S11_absSq),color='c',linestyle='--')
+ax.plot(f/1e9,to_db(FB.S21_absSq),color='m',linestyle='--')
+ax.plot(f/1e9,to_db(np.sum(FB.S31_absSq_list,axis=1)),color='k',linestyle='--')
+ax.plot(f/1e9,to_db(np.sum(FB.S31_absSq_list,axis=1) + FB.S21_absSq + FB.S11_absSq),color='k') # Sum of all, should be 1
+ax.plot(f/1e9,to_db(1 - FB.S11_absSq - FB.S21_absSq),color='grey') 
 
-# plt.show()
+ax.set_xlabel("f [GHz]")
+ax.set_ylabel("S-parameters")
+ax.grid()
+ax.set_xlim(100,300)
+ax.set_ylim(-30,0)
+
+plt.show()

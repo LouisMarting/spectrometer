@@ -64,3 +64,6 @@ def ABCD_eye(size,**ndarray_kwargs):
     size = tuple(size) if np.iterable(size) else (size,)
     ndarray_kwargs.pop('dtype', None)
     return np.tile(np.eye(2,dtype=np.cfloat,**ndarray_kwargs),reps=size+(1,1))
+
+def to_db(power_value):
+    return 10 * np.log10(power_value)
