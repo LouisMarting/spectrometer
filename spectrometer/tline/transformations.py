@@ -25,7 +25,7 @@ def unchain(*ABCDmatrices,at='front'):
     The second matrix given is removed first, then the third, etc...
 
     TODO: Since we always use 2x2 matrices for the ABCD matrix calculations, 
-    we can use the shorthand of the inverse for a 2x2 matrix to hopefully speed things up.
+    we can use the shorthand of the inverse for a 2x2 matrix to hopefully speed things up. edit: probs not, numpy is optimized already.
 
     """
     assert len(ABCDmatrices) >= 2, "unchain() needs at least two ABCD matrices"

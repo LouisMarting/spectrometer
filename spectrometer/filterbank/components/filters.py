@@ -306,3 +306,16 @@ class DirectionalFilter(BaseFilter):
 
         return (ABCD_port3,ABCD_port4,)
 
+class DeletedFilter(BaseFilter):
+    n_outputs = 0
+
+    def __init__(self, f0, Ql, TransmissionLines : dict, thru_line_electrical_length) -> None:
+        super().__init__(f0, Ql, TransmissionLines)
+        
+        self.l_thru = self.TransmissionLine_through.wavelength(f0) * thru_line_electrical_length
+    
+    def ABCD(self, f):
+        return self.TransmissionLine_through.ABCD(f, l=self.l_thru)
+    
+    def ABCD_to_MKID(self):
+        return None
