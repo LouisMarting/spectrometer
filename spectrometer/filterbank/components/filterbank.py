@@ -477,14 +477,20 @@ class Filterbank:
                 Filter.TransmissionLine_MKID.eps_eff = Filter.TransmissionLine_MKID.eps_eff * relative_shift
                 Filter.Resonator1.TransmissionLine.eps_eff = Filter.Resonator1.TransmissionLine.eps_eff * relative_shift
                 Filter.Resonator2.TransmissionLine.eps_eff = Filter.Resonator2.TransmissionLine.eps_eff * relative_shift
+                Filter.sep = Filter.TransmissionLine_through.wavelength(Filter.f0) / 4
             elif type(Filter) == ReflectorFilter:
                 Filter.TransmissionLine_through.eps_eff = Filter.TransmissionLine_through.eps_eff * relative_shift
                 Filter.TransmissionLine_MKID.eps_eff = Filter.TransmissionLine_MKID.eps_eff * relative_shift
                 Filter.Resonator.TransmissionLine.eps_eff = Filter.Resonator.TransmissionLine.eps_eff * relative_shift
                 Filter.Reflector.TransmissionLine.eps_eff = Filter.Reflector.TransmissionLine.eps_eff * relative_shift
+                Filter.sep = Filter.TransmissionLine_through.wavelength(Filter.f0) / 4
+                Filter.lmda_quarter = Filter.TransmissionLine_through.wavelength(Filter.f0) / 4
             elif type(Filter) == ManifoldFilter:
                 Filter.TransmissionLine_through.eps_eff = Filter.TransmissionLine_through.eps_eff * relative_shift
                 Filter.TransmissionLine_MKID.eps_eff = Filter.TransmissionLine_MKID.eps_eff * relative_shift
                 Filter.Resonator.TransmissionLine.eps_eff = Filter.Resonator.TransmissionLine.eps_eff * relative_shift
+                Filter.sep = Filter.TransmissionLine_through.wavelength(Filter.f0) / 4
+                Filter.lmda_quarter = Filter.TransmissionLine_through.wavelength(Filter.f0) / 4
+                Filter.lmda_3quarter = Filter.TransmissionLine_MKID.wavelength(Filter.f0) * 3 / 4
         return
 
