@@ -85,7 +85,7 @@ class Filterbank:
         existing_filters = self.Filters[i_existing_filters]
 
         s_array_size = self.FilterClass.n_outputs * len(existing_filters) + 2
-        S = np.empty((len(f),s_array_size,),dtype=np.cfloat)
+        S = np.empty((len(f),s_array_size,),dtype=np.cdouble)
 
         for i,Filter in enumerate(existing_filters):
             Filter : BaseFilter # set the expected datatype of Filter
@@ -203,7 +203,7 @@ class Filterbank:
     #             )
         
     #     s_parameter_array_size = Filter.n_outputs() * len(sparse_indices) + 2
-    #     S = np.empty((len(f),s_parameter_array_size,),dtype=np.cfloat)
+    #     S = np.empty((len(f),s_parameter_array_size,),dtype=np.cdouble)
 
     #     for i,Filter in enumerate(self.Filters):
     #         Filter : BaseFilter # set the expected datatype of Filter
