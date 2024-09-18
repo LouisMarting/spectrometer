@@ -54,7 +54,7 @@ def abcd_shuntload(Z):
     """
     Calculate the ABCD matrix of a shunt load.
     """
-    Z = np.array(Z,dtype=np.cfloat)  
+    Z = np.array(Z,dtype=np.cdouble)  
     Z = Z[...,np.newaxis,np.newaxis]    # elegant solution to extend the dimension by two, 
                                         # allowing elegant use of np.ones_like(), np.zeros_like() and np.block()
 
@@ -72,7 +72,7 @@ def abcd_seriesload(Z):
     """
     Calculate the ABCD matrix of a series load.
     """
-    Z = np.array(Z,dtype=np.cfloat)  
+    Z = np.array(Z,dtype=np.cdouble)  
     Z = Z[...,np.newaxis,np.newaxis]    # elegant solution to extend the dimension by two, 
                                         # allowing elegant use of np.ones_like(), np.zeros_like() and np.block()
     
@@ -110,7 +110,7 @@ def abcd2s(ABCD,Z0):
     
     See: "Conversions between S, Z, Y, H, ABCD, and T parameters which are valid for complex source and load impedances," D.A. Frickey, 1994.
     """
-    S = np.empty_like(ABCD,dtype=np.cfloat)
+    S = np.empty_like(ABCD,dtype=np.cdouble)
     
     A = ABCD[...,0,0]
     B = ABCD[...,0,1]
@@ -132,7 +132,7 @@ def abcd2s(ABCD,Z0):
 
 def abcd2z(ABCD):
     try:
-        Z = np.empty_like(ABCD,dtype=np.cfloat)
+        Z = np.empty_like(ABCD,dtype=np.cdouble)
         
         A = ABCD[...,0,0]
         B = ABCD[...,0,1]
@@ -150,7 +150,7 @@ def abcd2z(ABCD):
 
 
 def abcd2y(ABCD):
-    Y = np.empty_like(ABCD,dtype=np.cfloat)
+    Y = np.empty_like(ABCD,dtype=np.cdouble)
     
     A = ABCD[...,0,0]
     B = ABCD[...,0,1]
@@ -166,7 +166,7 @@ def abcd2y(ABCD):
 
 
 def s2abcd(S,Z0):
-    ABCD = np.empty_like(S,dtype=np.cfloat)
+    ABCD = np.empty_like(S,dtype=np.cdouble)
     
     S11 = S[...,0,0]
     S12 = S[...,0,1]
@@ -191,7 +191,7 @@ def z2abcd():
 
 
 def y2abcd(Y):
-    ABCD = np.empty_like(Y,dtype=np.cfloat)
+    ABCD = np.empty_like(Y,dtype=np.cdouble)
 
     Y11 = Y[...,0,0]
     Y12 = Y[...,0,1]

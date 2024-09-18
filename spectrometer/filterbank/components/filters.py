@@ -65,7 +65,7 @@ class BaseFilter:
             return self.S_param
         else:
             s_parameter_array_size = self.n_outputs + 2
-            S = np.empty((len(f),s_parameter_array_size,),dtype=np.cfloat)
+            S = np.empty((len(f),s_parameter_array_size,),dtype=np.cdouble)
             S_through  = abcd2s(self.ABCD(f),self.TransmissionLine_through.Z0)
             S[:,0] = S_through[:,0,0] # S11
             S[:,1] = S_through[:,1,0] # S21
