@@ -124,6 +124,9 @@ class Filterbank:
     
 
     def _generate_preceding_succeeding_total(self,f):
+        # Generate the arrays for storing the preceding and succeeding arrays in the FB calculation
+        # Hopefully, pregenerating helps with improving the code.
+
         size = (len(self.f0),len(f))
         ABCD_preceding = ABCD_eye(size)
         ABCD_succeeding = ABCD_eye(size)
@@ -162,7 +165,6 @@ class Filterbank:
                 thru_line_electrical_length = 0
 
             self.Filters[i] = DeletedFilter(Filter_del.f0,Filter_del.Ql,Filter_del.TransmissionLines,thru_line_electrical_length)
-
 
 
     # # This should combine with the function above
